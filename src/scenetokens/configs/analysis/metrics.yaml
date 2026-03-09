@@ -68,7 +68,7 @@ benchmark_colormap: null
 benchmark_splits_to_compare: []
 
 # Ego-safeshift analysis
-run_ego_safeshift_analysis: true
+run_ego_safeshift_analysis: false
 ego_safeshift_benchmark: 'ego-safeshift-causal-benchmark'
 ego_safeshift_filepath: "./meta/distribution_shift_results/ego_safeshift_benchmark.csv"
 ego_safeshift_colormap: colorblind
@@ -78,7 +78,7 @@ ego_safeshift_splits_to_compare: [
 ]
 
 # Causal benchmark analysis
-run_causal_benchmark_analysis: true
+run_causal_benchmark_analysis: false
 causal_benchmark: 'causal-benchmark-labeled'
 causal_benchmark_filepath: "./meta/distribution_shift_results/causal_benchmark.csv"
 causal_benchmark_colormap: colorblind
