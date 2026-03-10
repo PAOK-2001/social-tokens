@@ -60,9 +60,8 @@ def main(config: DictConfig) -> float | None:
             scenario = pickle.load(f)
 
         scenario = dataset.repack_scenario(scenario)
-        scenario_scores = None
-        # scenario_features = dataset.scenario_features_processor.compute(scenario)
-        # scenario_scores = dataset.scenario_scores_processor.compute(scenario, scenario_features)
+        scenario_features = dataset.scenario_features_processor.compute(scenario)
+        scenario_scores = dataset.scenario_scores_processor.compute(scenario, scenario_features)
 
         if visualizer.is_ego_centric:
             scenario = dataset.process_agent_centric_scenario(scenario)[0]
