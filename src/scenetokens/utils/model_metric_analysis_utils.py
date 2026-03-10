@@ -586,12 +586,10 @@ def _plot_sample_selection_sweep_heatmap_baseline_gap(  # noqa: PLR0912, PLR0915
                 gap_val = row[j]
 
                 # Highlight if gap is negative (improvement over baseline)
+                edge_color, marker_color = "black", "black"
                 if gap_val < 0:
                     edge_color = highlight_color
                     marker_color = highlight_color
-                else:
-                    edge_color = "black"
-                    marker_color = "black"
 
                 if config.add_rectangle_annotation:
                     ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor=edge_color, linewidth=3))
@@ -613,24 +611,8 @@ def _plot_sample_selection_sweep_heatmap_baseline_gap(  # noqa: PLR0912, PLR0915
 
         # Legend handles to show best strategies
         legend = [
-            Line2D(
-                [0],
-                [0],
-                marker="*",
-                color=highlight_color,
-                linestyle="None",
-                markersize=10,
-                label="Best strategy (closest to baseline)",
-            ),
-            Line2D(
-                [0],
-                [0],
-                marker="*",
-                color="black",
-                linestyle="None",
-                markersize=10,
-                label="Best strategy (worse than baseline)",
-            ),
+            Line2D([0], [0], marker="*", color=highlight_color, markersize=10, label="Best strategy > base"),
+            Line2D([0], [0], marker="*", color="black", markersize=10, label="Best strategy in group"),
         ]
 
         # Save figure
@@ -868,10 +850,16 @@ def _plot_sample_selection_sweep_distribution_gap(  # noqa: PLR0912, PLR0915
 
 
 def plot_sample_selection_sweep_heatmap(config: DictConfig, log: Logger, output_path: Path) -> None:
-    """For each split and metric, creates a figure with P heatmaps (one per retention percentage). Each heatmap shows:
-    - rows: models
-    - columns: strategies
-    - color: metric value (lower is better)
+    """Creates heatmaps comparing sample selection sweeps for each (model, split, retention_percentage, metric).
+
+    For each split and metric, generates P heatmaps (one per retention percentage) with rows as models, columns as
+    strategies, and color representing metric values. Also generates baseline gap heatmaps when multiple dataframes are
+    available.
+
+    Args:
+        config (DictConfig): encapsulates model analysis configuration parameters.
+        log (Logger): Logger for logging analysis information.
+        output_path (Path): Directory to save the generated plots.
     """
     plt.rcParams.update(
         {
@@ -886,7 +874,7 @@ def plot_sample_selection_sweep_heatmap(config: DictConfig, log: Logger, output_
     # Load metrics CSV
     metrics_dataframes = {}
     for file in config.sample_selection_files:
-        log.info("Processing sample selection sweep lineplots for file: %s", file)
+        log.info("Processing sample selection sweep heatmaps for file: %s", file)
         metrics_filepath = Path(file)
         if not metrics_filepath.exists():
             log.error("Sample selection CSV not found at %s", metrics_filepath)
@@ -896,8 +884,10 @@ def plot_sample_selection_sweep_heatmap(config: DictConfig, log: Logger, output_
         metrics_dataframes[suffix] = metrics_df
         _plot_sample_selection_sweep_heatmap(config, log, output_path, metrics_df, f"_{suffix}")
 
-    _plot_sample_selection_sweep_heatmap_baseline_gap(config, log, output_path, metrics_dataframes)
-    _plot_sample_selection_sweep_distribution_gap(config, log, output_path, metrics_dataframes)
+    # If multiple metrics files are available, create heatmaps showing gap to baseline across selectors
+    if len(metrics_dataframes) > 1:
+        _plot_sample_selection_sweep_heatmap_baseline_gap(config, log, output_path, metrics_dataframes)
+        _plot_sample_selection_sweep_distribution_gap(config, log, output_path, metrics_dataframes)
 
 
 def _plot_distribution_shift_comparison(
