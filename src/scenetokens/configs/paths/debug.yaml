@@ -3,9 +3,11 @@ defaults:
 
 tag: 'debug'
 
-train_data_path: [ "${paths.base_path}/processed/mini_causal/testing"]
+train_data_path: [ "${paths.base_path}/processed/debug/training"]
 train_data_tag: ["debug-training"]
-val_data_path: ["${paths.base_path}/processed/mini_causal/testing"]
+
+val_data_path: ["${paths.base_path}/processed/debug/validation"]
 val_data_tag: ["debug-validation"]
-test_data_path: ["${paths.base_path}/processed/mini_causal/testing"]
+
+test_data_path: ["${paths.base_path}/processed/debug/testing"]
 test_data_tag: ["debug-testing"]
