@@ -4,7 +4,6 @@ between the subsets.
 """
 
 import argparse
-import json
 from pathlib import Path
 
 import h5py
@@ -64,8 +63,8 @@ def _compute_score_heatmap(h5_files: list[Path]) -> NDArray[np.int_]:
     return heatmap
 
 
-def compute_agent_score_distributions(data_cache_path: Path, data_subsets: list[str], output_path: Path) -> None:  # noqa: PLR0915
-    """Computes the agent score distributions for different data subsets as categorical heatmaps.
+def plot_agent_score_distributions(data_cache_path: Path, data_subsets: list[str], output_path: Path) -> None:
+    """Visualizes the agent score distributions for different data subsets as categorical heatmaps.
 
     Args:
         data_cache_path (Path): Path to the data cache.
@@ -83,7 +82,6 @@ def compute_agent_score_distributions(data_cache_path: Path, data_subsets: list[
 
         heatmap = _compute_score_heatmap(h5_files)
 
-        # Visualize heatmap
         sns.heatmap(
             heatmap,
             annot=True,
@@ -104,48 +102,6 @@ def compute_agent_score_distributions(data_cache_path: Path, data_subsets: list[
         plt.savefig(output_filepath, dpi=300)
         plt.close()
 
-        # Summarize heatmap
-        total_agents = heatmap.sum()
-        interaction_assignments = heatmap.sum(axis=0)
-        interaction_distribution = interaction_assignments / total_agents
-        inv_interaction_distribution = 1 - interaction_distribution
-        individual_assignments = heatmap.sum(axis=1)
-        individual_distribution = individual_assignments / total_agents
-        inv_individual_distribution = 1 - individual_distribution
-
-        summary = {}
-        summary["total_agents"] = total_agents.item()
-        summary["interaction_assignments"] = interaction_assignments.tolist()
-        summary["individual_assignments"] = individual_assignments.tolist()
-        summary["interaction_distribution"] = interaction_distribution.round(3).tolist()
-        summary["individual_distribution"] = individual_distribution.round(3).tolist()
-        summary["inv_interaction_distribution"] = inv_interaction_distribution.round(3).tolist()
-        summary["inv_individual_distribution"] = inv_individual_distribution.round(3).tolist()
-
-        summary_filepath = output_path / f"{data_subset}_summary.json"
-        with summary_filepath.open("w") as f:
-            json.dump(summary, f, indent=4)
-
-        # Filter out 0 from the heatmap
-        total_agents_agents = heatmap[1:, 1:].sum()
-        interaction_assignments_agents = heatmap[1:, 1:].sum(axis=0)
-        interaction_distribution_agents = interaction_assignments_agents / total_agents_agents
-        inv_interaction_distribution_agents = 1 - interaction_distribution_agents
-        individual_assignments_agents = heatmap[1:, 1:].sum(axis=1)
-        individual_distribution_agents = individual_assignments_agents / total_agents_agents
-        inv_individual_distribution_agents = 1 - individual_distribution_agents
-        filtered_summary = {}
-        filtered_summary["total_agents"] = total_agents_agents.item()
-        filtered_summary["interaction_assignments"] = interaction_assignments_agents.tolist()
-        filtered_summary["individual_assignments"] = individual_assignments_agents.tolist()
-        filtered_summary["interaction_distribution"] = interaction_distribution_agents.round(3).tolist()
-        filtered_summary["individual_distribution"] = individual_distribution_agents.round(3).tolist()
-        filtered_summary["inv_interaction_distribution"] = inv_interaction_distribution_agents.round(3).tolist()
-        filtered_summary["inv_individual_distribution"] = inv_individual_distribution_agents.round(3).tolist()
-        filtered_summary_filepath = output_path / f"{data_subset}_filtered_summary.json"
-        with filtered_summary_filepath.open("w") as f:
-            json.dump(filtered_summary, f, indent=4)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze distribution shift in datasets.")
@@ -155,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_subsets",
         type=list[str],
-        default=["causal-ego-safeshift-id", "causal-ego-safeshift-ood", "causal-ego-safeshift-training"],
+        default=["causal-ego-safeshift-training", "causal-ego-safeshift-id", "causal-ego-safeshift-ood"],
         help="List of data subsets to analyze.",
     )
     parser.add_argument(
@@ -166,4 +122,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    compute_agent_score_distributions(args.data_cache_path, args.data_subsets, args.output_path)
+    plot_agent_score_distributions(args.data_cache_path, args.data_subsets, args.output_path)
