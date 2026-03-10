@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 # Sample selection
-create_training_batch_cache: true # if 'true' it will create a batch cache for the train data using the pretrained model.
+create_training_batch_cache: false # if 'true' it will create a batch cache for the train data using the pretrained model.
 model:
   config:
     sample_selection: true
