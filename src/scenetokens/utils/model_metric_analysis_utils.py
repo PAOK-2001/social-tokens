@@ -551,11 +551,12 @@ def _plot_sample_selection_sweep_heatmap_baseline_gap(  # noqa: PLR0912, PLR0915
 
         # Figure layout
         x_size = 4.0 * num_retention_pcts + 2.2
-        y_size = 0.7 * num_models + 2.2
+        y_size = 0.7 * num_models + 1
         fig, axes = plt.subplots(1, num_retention_pcts, figsize=(x_size, y_size), squeeze=False)
         axes = axes[0]
 
         # Plot strategy heatmaps
+        im = None
         for k, (ax, pct) in enumerate(zip(axes[:num_retention_pcts], retention_pcts, strict=False)):
             data = heatmap_data[pct]
             masked_data = np.ma.masked_invalid(data)
@@ -604,10 +605,11 @@ def _plot_sample_selection_sweep_heatmap_baseline_gap(  # noqa: PLR0912, PLR0915
             ax.tick_params(which="minor", bottom=False, left=False)
 
         # Colorbar
-        cax = fig.add_axes(rect=(0.90, 0.11, 0.03, 0.7))
-        cbar = fig.colorbar(im, cax=cax)
-        cbar.ax.tick_params(labelsize=12)
-        cbar.set_label("Gap to Baseline (%)", fontsize=10)
+        if im is not None:
+            cax = fig.add_axes(rect=(0.90, 0.11, 0.03, 0.7))
+            cbar = fig.colorbar(im, cax=cax)
+            cbar.ax.tick_params(labelsize=12)
+            cbar.set_label("Gap to Baseline (%)", fontsize=10)
 
         # Legend handles to show best strategies
         legend = [
@@ -743,6 +745,7 @@ def _plot_sample_selection_sweep_distribution_gap(  # noqa: PLR0912, PLR0915
         axes = axes[0]
 
         # Plot strategy heatmaps
+        im = None
         for k, (ax, pct) in enumerate(zip(axes[:num_retention_pcts], retention_pcts, strict=False)):
             data = heatmap_data[pct]
             masked_data = np.ma.masked_invalid(data)
@@ -813,10 +816,11 @@ def _plot_sample_selection_sweep_distribution_gap(  # noqa: PLR0912, PLR0915
             ax.tick_params(which="minor", bottom=False, left=False)
 
         # Colorbar
-        cax = fig.add_axes(rect=(0.90, 0.11, 0.03, 0.7))
-        cbar = fig.colorbar(im, cax=cax)
-        cbar.ax.tick_params(labelsize=12)
-        cbar.set_label(f"Gap ({ood_subsplit} - {id_subsplit}) %", fontsize=10)
+        if im is not None:
+            cax = fig.add_axes(rect=(0.90, 0.11, 0.03, 0.7))
+            cbar = fig.colorbar(im, cax=cax)
+            cbar.ax.tick_params(labelsize=12)
+            cbar.set_label(f"Gap ({ood_subsplit} - {id_subsplit}) %", fontsize=10)
 
         # Legend handles to show best strategies
         legend = [
