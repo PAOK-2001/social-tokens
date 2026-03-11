@@ -56,6 +56,7 @@ config:
     _target_: scenetokens.models.criterion.safe_scenetokens.SafeSceneTokens
     config:
       reduction: 'mean'
+      num_classes: ${model.config.num_labels}
       reconstruction_weight: 1.0
       trajpred_weight: 1.0
       tokenization_weight: 1.0
