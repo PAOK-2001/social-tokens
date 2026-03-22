@@ -13,7 +13,10 @@ from scenetokens.schemas.output_schemas import (
     TokenizationOutput,
     TrajectoryDecoderOutput,
 )
+from scenetokens.utils import pylogger
 
+
+_LOGGER = pylogger.get_pylogger(__name__)
 
 class SceneTokens(BaseModel):
     """SceneTokens class.
@@ -46,6 +49,20 @@ class SceneTokens(BaseModel):
 
         # Scenario Classifier
         self.scenario_tokenizer = self.config.tokenizer
+
+        # Optional projection for quantized latent → decoder hidden size.
+        # Use encoder[-1].out_features to get reduced_hidden_size without storing reduction_factor.
+        quantized_size = self.scenario_tokenizer.encoder[-1].out_features
+        self.quantized_projection = (
+            nn.Linear(quantized_size, self.config.hidden_size) if self.config.use_quantized else None
+        )
+        if self.config.use_quantized:
+            _LOGGER.info(f"Using quantized scenario embedding with size {quantized_size} and projection to {self.config.hidden_size}.")
+
+        # Element-level tokenizer (quantizes mixed_input_features before the Perceiver)
+        self.element_tokenizer = self.config.element_tokenizer if self.config.element_tokens else None
+        if self.config.element_tokens:
+            _LOGGER.info("Using element-level tokenization on mixed_input_features.")
 
         # Trajectory decoder
         self.motion_decoder = self.config.motion_decoder
@@ -100,24 +117,43 @@ class SceneTokens(BaseModel):
         # Get scenario scores if available
         scenario_scores = BaseModel.gather_scores(inputs)
 
-        # Process and embed historical information using `self.embed()`.
-        scenario_embedding: ScenarioEmbedding = self.embed(ego_agent, other_agents, roads)
+        assert not (self.config.element_tokens and self.config.use_reconstructed)
+        assert not (self.config.element_tokens and self.config.use_quantized)
+        assert not (self.config.element_tokens and self.config.token_conditioning)
+        assert not (self.config.use_reconstructed and self.config.use_quantized), (
+            "use_reconstructed and use_quantized are mutually exclusive."
+        )
 
-        # Decode the scenario trajectories
-        context = scenario_embedding.scenario_dec.value
+        if self.config.element_tokens:
+            # Quantize mixed_input_features before the Perceiver.
+            # Mixed_features: (B, M, 256), mixed_masks: (B, M)
+            mixed_features, mixed_masks = self._build_mixed_features(ego_agent, other_agents, roads)
+            tokenized_scenario: TokenizationOutput = self.element_tokenizer(mixed_features)
+            scenario_embedding: ScenarioEmbedding = self.scenario_embedder(
+                tokenized_scenario.reconstructed_embedding.value, mixed_masks
+            )
+            context = scenario_embedding.scenario_dec.value  # (B, 6, 256) — continuous
+            decoded_trajectories: TrajectoryDecoderOutput = self.motion_decoder(context, tokens=None)
+        else:
+            # Embed then tokenize the Perceiver output queries.
+            scenario_embedding = self.embed(ego_agent, other_agents, roads)
+            context = scenario_embedding.scenario_dec.value
 
-        # Classify the scenario using the selected tokenizer.
-        tokenized_scenario: TokenizationOutput = self.scenario_tokenizer(context)
-        if self.config.use_reconstructed:
-            context = tokenized_scenario.reconstructed_embedding.value
+            # Classify the scenario using the selected tokenizer.
+            tokenized_scenario = self.scenario_tokenizer(context)
 
-        tokens = None
-        if self.config.token_conditioning:
-            tokens = tokenized_scenario.token_indices.value
-            tokens = F.one_hot(tokens, num_classes=self.config.tokenizer.num_tokens).detach()
+            if self.config.use_reconstructed:
+                context = tokenized_scenario.reconstructed_embedding.value
 
-        # Decode the scenario trajectories
-        decoded_trajectories: TrajectoryDecoderOutput = self.motion_decoder(context, tokens)
+            elif self.config.use_quantized:
+                context = self.quantized_projection(tokenized_scenario.quantized_embedding.value)
+
+            tokens = None
+            if self.config.token_conditioning:
+                tokens = tokenized_scenario.token_indices.value
+                tokens = F.one_hot(tokens, num_classes=self.config.tokenizer.num_tokens).detach()
+
+            decoded_trajectories = self.motion_decoder(context, tokens)
 
         return ModelOutput(
             scenario_embedding=scenario_embedding,
@@ -131,8 +167,10 @@ class SceneTokens(BaseModel):
             scenario_scores=scenario_scores,
         )
 
-    def embed(self, ego_agent: torch.Tensor, other_agents: torch.Tensor, roads: torch.Tensor) -> ScenarioEmbedding:
-        """Encode scenario context from agents and map features.
+    def _build_mixed_features(
+        self, ego_agent: torch.Tensor, other_agents: torch.Tensor, roads: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return (mixed_input_features, mixed_input_masks) without running the Perceiver.
 
         Notation:
             B: batch size
@@ -140,17 +178,15 @@ class SceneTokens(BaseModel):
             H: history length
             P: number of map polylines
             L: number of points per polyline
-            Da: number of agent features
-            Dr: number of road features
-            E: hidden size
+            M: H * (1+N) + P * L  (total scene elements)
 
         Args:
-            ego_agent (torch.Tensor): tensor with shape (B, H, Da + 1), containing ego-agent features and mask.
-            other_agents (torch.Tensor): tensor with shape (B, H, N, Da + 1), containing other-agent features and masks.
-            roads (torch.Tensor): tensor with shape (B, P, L, Dr + 1), containing map features and mask.
+            ego_agent (torch.Tensor): shape (B, H, Da + 1)
+            other_agents (torch.Tensor): shape (B, H, N, Da + 1)
+            roads (torch.Tensor): shape (B, P, L, Dr + 1)
 
         Returns:
-            ScenarioEmbedding: encoded and decoded scenario context used by the trajectory decoder.
+            tuple: (mixed_input_features (B, M, E), mixed_input_masks (B, M))
         """
         # Ego information
         #   ego tensor shape: (B, H, D+1)
@@ -196,4 +232,28 @@ class SceneTokens(BaseModel):
         #   mixed_input_masks shape: (B, H * (1+N) + P * L)
         mixed_input_features = torch.concat([agents_emb, road_emb], dim=1)
         mixed_input_masks = torch.concat([agent_masks_inv.view(batch_size, -1), roads_inv.view(batch_size, -1)], dim=1)
+        return mixed_input_features, mixed_input_masks
+
+    def embed(self, ego_agent: torch.Tensor, other_agents: torch.Tensor, roads: torch.Tensor) -> ScenarioEmbedding:
+        """Encode scenario context from agents and map features.
+
+        Notation:
+            B: batch size
+            N: max number of non-ego agents in the scene
+            H: history length
+            P: number of map polylines
+            L: number of points per polyline
+            Da: number of agent features
+            Dr: number of road features
+            E: hidden size
+
+        Args:
+            ego_agent (torch.Tensor): tensor with shape (B, H, Da + 1), containing ego-agent features and mask.
+            other_agents (torch.Tensor): tensor with shape (B, H, N, Da + 1), containing other-agent features and masks.
+            roads (torch.Tensor): tensor with shape (B, P, L, Dr + 1), containing map features and mask.
+
+        Returns:
+            ScenarioEmbedding: encoded and decoded scenario context used by the trajectory decoder.
+        """
+        mixed_input_features, mixed_input_masks = self._build_mixed_features(ego_agent, other_agents, roads)
         return self.scenario_embedder(mixed_input_features, mixed_input_masks)
