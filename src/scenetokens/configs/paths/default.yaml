@@ -4,7 +4,7 @@
 root_dir: ${oc.env:PROJECT_ROOT}
 tag: 'mini'
 
-base_path: /data/driving/${scenario.dataset_name}
+base_path: /ocean/projects/cis260038p/shared/datasets/driving/${scenario.dataset_name}
 data_cache_path: ${paths.base_path}/data_cache
 experiment_cache_path: ${paths.base_path}/${paths.tag}/model_cache
 temp_path: "temp"

@@ -5,7 +5,7 @@ wandb:
 
   # Team, project and experiment name
   entity: "traj-" # set to name of your wandb team
-  project: "scenetokens"
+  project: "scenetokens-ablations"
   name: "${exp_name}"
 
   offline: False

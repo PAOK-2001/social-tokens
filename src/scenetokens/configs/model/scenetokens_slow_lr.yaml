@@ -1,6 +1,6 @@
 defaults:
   - default.yaml
-  - wayformer.yaml # Model's backbone architecture directly builds from Wayformer
+  - wayformer_passive_lr.yaml # Model's backbone architecture directly builds from Wayformer
 
 _target_: scenetokens.models.scenetokens.SceneTokens
 config:
@@ -13,20 +13,12 @@ config:
   use_reconstructed: false
   token_conditioning: false
   use_quantized: false
-  element_tokens: false
   tokenizer_name: quantized
   tokenizer_tags: num-tokens-${model.config.tokenizer.num_tokens}_normalize-${model.config.tokenizer.normalize}
   tokenizer:
     _target_: scenetokens.models.scene.tokenizers.quantized_tokenizer.QuantizedTokenizer
     num_queries: ${model.config.num_modes}
     hidden_size: 256
-    num_tokens: ${model.config.num_classes}
-    reduction_factor: 2
-    normalize: false
-  element_tokenizer:
-    _target_: scenetokens.models.scene.tokenizers.quantized_tokenizer.QuantizedTokenizer
-    num_queries: 1          # placeholder; element count M is dynamic and inferred in forward()
-    hidden_size: ${model.config.hidden_size}
     num_tokens: ${model.config.num_classes}
     reduction_factor: 2
     normalize: false

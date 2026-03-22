@@ -1,7 +1,7 @@
 defaults:
   - default.yaml
 
-base_path: /datasets/waymo
+base_path: /ocean/projects/cis260038p/shared/datasets/driving/waymo
 tag: 'mini'
 
 train_data_path: [ "${paths.base_path}/processed/mini/training" ] # list of paths to the training data
