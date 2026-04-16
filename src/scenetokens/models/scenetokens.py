@@ -61,6 +61,9 @@ class SceneTokens(BaseModel):
 
         # Element-level tokenizer (quantizes mixed_input_features before the Perceiver)
         self.element_tokenizer = self.config.element_tokenizer if self.config.element_tokens else None
+        self.element_quantized_projection = (
+            nn.Linear(quantized_size, self.config.hidden_size) if self.config.element_tokens else None
+        )
         if self.config.element_tokens:
             _LOGGER.info("Using element-level tokenization on mixed_input_features.")
 
@@ -130,7 +133,7 @@ class SceneTokens(BaseModel):
             mixed_features, mixed_masks = self._build_mixed_features(ego_agent, other_agents, roads)
             tokenized_scenario: TokenizationOutput = self.element_tokenizer(mixed_features)
             scenario_embedding: ScenarioEmbedding = self.scenario_embedder(
-                tokenized_scenario.reconstructed_embedding.value, mixed_masks
+                self.element_quantized_projection(tokenized_scenario.quantized_embedding.value), mixed_masks
             )
             context = scenario_embedding.scenario_dec.value  # (B, 6, 256) — continuous
             decoded_trajectories: TrajectoryDecoderOutput = self.motion_decoder(context, tokens=None)

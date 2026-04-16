@@ -21,21 +21,27 @@ class Reconstruction(Criterion):
     def compute_tokenization_reconstruction(self, tokenization: TokenizationOutput) -> torch.Tensor:
         """Compute tokenization reconstruction loss as MSE plus tokenization loss.
 
+        When the tokenizer operates without a decoder (``reconstruct=False``), the
+        reconstruction term is skipped and only the VQ commitment/codebook loss is returned.
+
         Args:
             tokenization (TokenizationOutput): Tokenization outputs and auxiliary loss.
 
         Returns:
             torch.Tensor: Tokenization reconstruction loss.
         """
-        pre_ae_embedding = tokenization.input_embedding.value
-        post_ae_embedding = tokenization.reconstructed_embedding.value
+        loss = torch.tensor(0.0, device=tokenization.input_embedding.value.device)
 
-        # Encourage the decoder to reconstruct the pre-encoded embedding.
-        loss = self.reconstruction_weight * F.mse_loss(
-            pre_ae_embedding,
-            post_ae_embedding,
-            reduction=self.reduction,
-        )
+        if tokenization.reconstructed_embedding is not None:
+            pre_ae_embedding = tokenization.input_embedding.value
+            post_ae_embedding = tokenization.reconstructed_embedding.value
+
+            # Encourage the decoder to reconstruct the pre-encoded embedding.
+            loss = self.reconstruction_weight * F.mse_loss(
+                pre_ae_embedding,
+                post_ae_embedding,
+                reduction=self.reduction,
+            )
 
         tokenization_loss = tokenization.loss
         if tokenization_loss is not None:

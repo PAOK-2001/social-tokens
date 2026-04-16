@@ -23,6 +23,7 @@ class QuantizedTokenizer(nn.Module):
         reduction_factor: int = 2,
         *,
         normalize: bool = False,
+        reconstruct: bool = True,
     ) -> None:
         """Initialize the quantized tokenizer.
 
@@ -34,10 +35,14 @@ class QuantizedTokenizer(nn.Module):
             commitment_weight (float): Commitment weight used by the VQ layer.
             reduction_factor (int): Compression factor for latent channels.
             normalize (bool): If `True`, apply `tanh` before encoding and after decoding.
+            reconstruct (bool): If `True`, include a decoder for VQ-VAE-style reconstruction.
+                If `False`, omit the decoder and rely on downstream prediction loss for gradient flow
+                through the straight-through estimator.
         """
         super().__init__()
         self.num_tokens = num_tokens
         self.num_queries = num_queries
+        self.reconstruct = reconstruct
 
         # Loss weights
         self.quantization_weight = quantization_weight
@@ -54,9 +59,13 @@ class QuantizedTokenizer(nn.Module):
             )
 
             # Decode back to the original hidden size.
-            self.decoder = nn.Sequential(
-                nn.Linear(reduced_hidden_size, hidden_size), nn.ReLU(), nn.Linear(hidden_size, hidden_size), nn.Tanh()
-            )
+            if self.reconstruct:
+                self.decoder = nn.Sequential(
+                    nn.Linear(reduced_hidden_size, hidden_size),
+                    nn.ReLU(),
+                    nn.Linear(hidden_size, hidden_size),
+                    nn.Tanh(),
+                )
         else:
             self.prepare_input = nn.Identity()
             self.encoder = nn.Sequential(
@@ -64,11 +73,12 @@ class QuantizedTokenizer(nn.Module):
             )
 
             # Decode back to the original hidden size.
-            self.decoder = nn.Sequential(
-                nn.Linear(reduced_hidden_size, hidden_size),
-                nn.ReLU(),
-                nn.Linear(hidden_size, hidden_size),
-            )
+            if self.reconstruct:
+                self.decoder = nn.Sequential(
+                    nn.Linear(reduced_hidden_size, hidden_size),
+                    nn.ReLU(),
+                    nn.Linear(hidden_size, hidden_size),
+                )
 
         # Quantization codebook
         self.quantize = VectorQuantize(
@@ -113,10 +123,12 @@ class QuantizedTokenizer(nn.Module):
         # Quantization loss shape: scalar tensor.
         quantized_embedding, token_indices, vq_loss = self.quantize(embedding_prequant)
 
-        # Decode the quantized embedding back to hidden size H.
-        # Decoder output shape: (B, Q, H).
-        embedding_postquant = self.decoder(quantized_embedding)
-        embedding_postquant = embedding_postquant.view(batch_size, num_queries, -1)
+        # Optionally decode the quantized embedding back to hidden size H.
+        embedding_postquant = None
+        if self.reconstruct:
+            # Decoder output shape: (B, Q, H).
+            embedding_postquant = self.decoder(quantized_embedding)
+            embedding_postquant = embedding_postquant.view(batch_size, num_queries, -1)
 
         return TokenizationOutput(
             num_tokens=self.num_tokens,
